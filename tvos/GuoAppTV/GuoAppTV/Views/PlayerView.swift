@@ -1,4 +1,5 @@
 import AVKit
+import CoreMedia
 import SwiftUI
 import UIKit
 
@@ -108,8 +109,12 @@ final class PlayerController: NSObject, ObservableObject {
     @Published var progress = PlaybackProgress(position: 0, duration: 0)
     @Published var endedToken = 0
     @Published var failedToken = 0
+    /// 临时诊断面板内容：播放状态、等待原因、音视频编码、播放地址。
+    @Published var debugInfo = ""
 
     let player = AVPlayer()
+    private var currentURL: URL?
+    private var currentHeaderCount = 0
     private let overlay = DanmakuOverlayView()
     private let danmaku = DanmakuEngine()
     private var timeObserver: Any?
@@ -131,6 +136,9 @@ final class PlayerController: NSObject, ObservableObject {
     func play(plan: PlaybackPlan, start: Double, danmakuEnabled: Bool) {
         danmaku.configure(plan: plan, enabled: danmakuEnabled)
         guard let url = URL(string: plan.url) else { return }
+        currentURL = url
+        currentHeaderCount = plan.headers.count
+        debugInfo = "正在加载…"
         let asset: AVURLAsset
         if plan.headers.isEmpty {
             asset = AVURLAsset(url: url)
@@ -168,6 +176,7 @@ final class PlayerController: NSObject, ObservableObject {
                 duration: duration.isFinite ? duration : 0
             )
             danmaku.tick(positionMs: Int(position * 1000))
+            updateDebugInfo()
         }
         if let item = player.currentItem {
             endObserver = NotificationCenter.default.addObserver(
@@ -181,6 +190,50 @@ final class PlayerController: NSObject, ObservableObject {
                 self?.failedToken += 1
             }
         }
+    }
+
+    /// 每秒刷新诊断面板：状态、等待原因、缓冲、音视频编码、播放地址。
+    /// 关键区分：playing + 无轨道/不支持的编码 = 流格式问题；
+    /// waitingToPlayAtSpecifiedRate + 缓冲空 = 分片拉不到（请求头/鉴权问题）。
+    private func updateDebugInfo() {
+        guard let item = player.currentItem else {
+            debugInfo = "无播放项"
+            return
+        }
+        var lines: [String] = []
+        lines.append("播放控制: \(player.timeControlStatus.rawValue) 等待原因: \(player.reasonForWaitingToPlay?.rawValue ?? "-")")
+        lines.append("速率: \(player.rate) 缓冲空: \(item.isPlaybackBufferEmpty) 大概率流畅: \(item.isPlaybackLikelyToKeepUp)")
+        if let error = item.error {
+            lines.append("错误: \(error.localizedDescription)")
+        }
+        let asset = item.asset
+        for mediaType in [AVMediaType.video, AVMediaType.audio] {
+            let tracks = asset.tracks(withMediaType: mediaType)
+            if tracks.isEmpty {
+                lines.append("\(mediaType.rawValue): 无轨道")
+            }
+            for track in tracks {
+                var codec = "?"
+                if let desc = track.formatDescriptions.first as? CMFormatDescription {
+                    let sub = CMFormatDescriptionGetMediaSubType(desc)
+                    let bytes: [UInt8] = [
+                        UInt8((sub >> 24) & 0xff), UInt8((sub >> 16) & 0xff),
+                        UInt8((sub >> 8) & 0xff), UInt8(sub & 0xff),
+                    ]
+                    codec = String(bytes: bytes, encoding: .ascii) ?? "?"
+                }
+                if mediaType == .video {
+                    lines.append("视频: \(codec) \(Int(track.naturalSize.width))x\(Int(track.naturalSize.height))")
+                } else {
+                    lines.append("音频: \(codec)")
+                }
+            }
+        }
+        if let url = currentURL {
+            lines.append("地址: \(url.host ?? "-")\(url.path)")
+            lines.append("请求头: \(currentHeaderCount) 个")
+        }
+        debugInfo = lines.joined(separator: "\n")
     }
 
     private func removeObservers() {
@@ -245,6 +298,18 @@ struct PlayerView: View {
             if plan != nil {
                 PlayerHostView(controller: controller)
                     .ignoresSafeArea()
+                if !controller.debugInfo.isEmpty {
+                    Text(controller.debugInfo)
+                        .font(.system(size: 22))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.leading)
+                        .padding(16)
+                        .background(Color.black.opacity(0.65))
+                        .cornerRadius(10)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .padding(48)
+                        .allowsHitTesting(false)
+                }
             } else if let error {
                 VStack(spacing: 24) {
                     Text("播放失败").font(.title)
