@@ -201,6 +201,14 @@ final class PlayerController: NSObject, ObservableObject {
             return
         }
         var lines: [String] = []
+        let itemStatus: String
+        switch item.status {
+        case .unknown: itemStatus = "未知"
+        case .readyToPlay: itemStatus = "就绪"
+        case .failed: itemStatus = "失败"
+        @unknown default: itemStatus = "其他(\(item.status.rawValue))"
+        }
+        lines.append("条目状态: \(itemStatus)")
         lines.append("播放控制: \(player.timeControlStatus.rawValue) 等待原因: \(player.reasonForWaitingToPlay?.rawValue ?? "-")")
         lines.append("速率: \(player.rate) 缓冲空: \(item.isPlaybackBufferEmpty) 大概率流畅: \(item.isPlaybackLikelyToKeepUp)")
         if let error = item.error {
@@ -226,9 +234,25 @@ final class PlayerController: NSObject, ObservableObject {
                     codec = String(bytes: bytes, encoding: .ascii) ?? "?"
                 }
                 if mediaType == .video {
-                    lines.append("视频: \(codec) \(Int(track.naturalSize.width))x\(Int(track.naturalSize.height))")
+                    let name: String
+                    switch codec {
+                    case "avc1", "h264": name = "H.264"
+                    case "hvc1", "hev1": name = "H.265/HEVC"
+                    case "av01": name = "AV1"
+                    case "mp4v": name = "MPEG-4"
+                    default: name = codec
+                    }
+                    lines.append("视频: \(name) (\(codec)) \(Int(track.naturalSize.width))x\(Int(track.naturalSize.height))")
                 } else {
-                    lines.append("音频: \(codec)")
+                    let name: String
+                    switch codec {
+                    case "mp4a": name = "AAC"
+                    case "ac-3": name = "杜比 AC-3"
+                    case "ec-3": name = "杜比 E-AC-3"
+                    case "opus": name = "Opus"
+                    default: name = codec
+                    }
+                    lines.append("音频: \(name) (\(codec))")
                 }
             }
         }
