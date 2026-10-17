@@ -57,8 +57,10 @@ struct PosterView: View {
 }
 
 /// 海报网格：首页 / 搜索 / 追剧共用，点海报进详情。
+/// `onReachEnd` 供首页无限滚动：最后一个海报出现时回调，由调用方拉下一页。
 struct PosterGrid: View {
     let items: [Drama]
+    var onReachEnd: (() -> Void)? = nil
 
     var body: some View {
         ScrollView {
@@ -71,11 +73,16 @@ struct PosterGrid: View {
                         VStack(alignment: .leading, spacing: 8) {
                             PosterView(drama: drama)
                             Text(drama.title)
-                                .font(.headline)
+                                .font(.system(size: 18))
                                 .lineLimit(2)
                             Text(drama.category.isEmpty ? drama.releaseLabel : drama.category)
-                                .font(.subheadline)
+                                .font(.system(size: 14))
                                 .foregroundColor(.secondary)
+                        }
+                    }
+                    .onAppear {
+                        if drama.id == items.last?.id {
+                            onReachEnd?()
                         }
                     }
                 }

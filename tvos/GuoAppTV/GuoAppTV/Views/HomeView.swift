@@ -16,11 +16,11 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 12) {
+                categoryRow
                 if appState.allSources {
                     sourceRow
                 }
-                categoryRow
                 if !warning.isEmpty {
                     Text(warning).font(.subheadline).foregroundColor(.secondary)
                 }
@@ -37,14 +37,13 @@ struct HomeView: View {
                     .frame(maxWidth: .infinity)
                     Spacer()
                 } else {
-                    PosterGrid(items: items)
-                    if hasMore {
+                    PosterGrid(items: items, onReachEnd: {
+                        Task { await loadMore() }
+                    })
+                    if loading && !items.isEmpty {
                         HStack {
                             Spacer()
-                            Button(loading ? "加载中…" : "加载更多") {
-                                Task { await loadMore() }
-                            }
-                            .disabled(loading)
+                            ProgressView("正在加载…")
                             Spacer()
                         }
                         .padding(.bottom, 8)
@@ -52,7 +51,6 @@ struct HomeView: View {
                 }
             }
             .padding(.horizontal, 48)
-            .navigationTitle("首页")
             .navigationDestination(for: Drama.self) { drama in
                 DetailView(drama: drama)
             }
@@ -64,18 +62,19 @@ struct HomeView: View {
 
     private var sourceRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 ForEach(SourceSite.available(allSources: appState.allSources)) { site in
                     let selected = site.id == appState.selectedSource
                     Button(site.name) {
                         selectedCategory = ""
                         appState.selectedSource = site.id
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
+                    .font(.system(size: 16))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
                     .background(selected ? Color.white : Color.white.opacity(0.12))
                     .foregroundColor(selected ? .black : .white)
-                    .cornerRadius(10)
+                    .cornerRadius(8)
                 }
             }
         }
@@ -83,17 +82,18 @@ struct HomeView: View {
 
     private var categoryRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 ForEach(categories) { category in
                     let selected = category.id == selectedCategory
                     Button(category.name) {
                         selectedCategory = category.id
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 8)
+                    .font(.system(size: 16))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
                     .background(selected ? Color.white : Color.white.opacity(0.12))
                     .foregroundColor(selected ? .black : .white)
-                    .cornerRadius(10)
+                    .cornerRadius(8)
                 }
             }
         }
@@ -105,9 +105,13 @@ struct HomeView: View {
         error = nil
         do {
             if categoriesSource != appState.selectedSource {
-                categories = [.all] + (try await CoreClient.shared.categories(
+                let fetched = try await CoreClient.shared.categories(
                     source: appState.selectedSource
-                ))
+                )
+                // 核心返回的分类里可能自带“全部”，与本地的 .all 重复；
+                // 按名称去重，保留第一个（即本地的 .all）。
+                var seenNames = Set<String>()
+                categories = ([.all] + fetched).filter { seenNames.insert($0.name).inserted }
                 categoriesSource = appState.selectedSource
             }
             let result = try await CoreClient.shared.catalog(
