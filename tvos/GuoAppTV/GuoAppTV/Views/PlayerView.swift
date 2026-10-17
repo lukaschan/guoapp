@@ -214,7 +214,10 @@ final class PlayerController: NSObject, ObservableObject {
             }
             for track in tracks {
                 var codec = "?"
-                if let desc = track.formatDescriptions.first {
+                if let first = track.formatDescriptions.first {
+                    // 元素必为 CMFormatDescription；先判空再强转，
+                    // 直接对 Optional 做 as! 会在数组为空时闪退。
+                    let desc = first as! CMFormatDescription
                     let sub = CMFormatDescriptionGetMediaSubType(desc)
                     let bytes: [UInt8] = [
                         UInt8((sub >> 24) & 0xff), UInt8((sub >> 16) & 0xff),
