@@ -139,6 +139,10 @@ def main():
         archive = derived / 'GuoAppTV.xcarchive'
         if archive.exists():
             shutil.rmtree(archive)
+        # 先解析 SPM 依赖（MPVKit 的 libmpv 二进制）：拉取失败时直接报错，
+        # 不等到 archive/build 阶段才暴露。
+        run(['xcodebuild', '-project', str(project), '-scheme', app_name,
+             '-resolvePackageDependencies'])
         # 注意：xcodebuild 要求 -derivedDataPath 必须配合 -scheme，
         # 用 -target 会直接报错退出（exit 64）。
         run(['xcodebuild', '-project', str(project), '-scheme', app_name,
@@ -154,6 +158,9 @@ def main():
             shutil.copy2(package, destination)
             artifacts.append(destination)
     else:
+        # 先解析 SPM 依赖（MPVKit 的 libmpv 二进制）：拉取失败时直接报错。
+        run(['xcodebuild', '-project', str(project), '-scheme', app_name,
+             '-resolvePackageDependencies'])
         run(['xcodebuild', '-project', str(project), '-scheme', app_name,
              '-sdk', 'appletvos', '-configuration', 'Release',
              '-derivedDataPath', str(derived), 'CODE_SIGNING_ALLOWED=NO', 'build'])
