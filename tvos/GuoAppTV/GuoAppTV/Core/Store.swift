@@ -97,6 +97,20 @@ final class Store: ObservableObject {
         progress.filter { $0.drama.id == dramaId }.max { $0.updatedAt < $1.updatedAt }
     }
 
+    /// 最近观看：每部剧只保留最新一条进度，按观看时间倒序。
+    /// 与 iOS 端 history 行为一致（按 drama 去重、按 updatedAt 倒序）。
+    var recentHistory: [WatchProgress] {
+        var latest: [String: WatchProgress] = [:]
+        for entry in progress {
+            if let old = latest[entry.drama.id] {
+                if entry.updatedAt > old.updatedAt { latest[entry.drama.id] = entry }
+            } else {
+                latest[entry.drama.id] = entry
+            }
+        }
+        return latest.values.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
     func progress(for dramaId: String, episode: Int) -> WatchProgress? {
         progress.first { $0.drama.id == dramaId && $0.episode == episode }
     }
