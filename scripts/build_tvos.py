@@ -1,6 +1,7 @@
 import argparse
 import os
 import platform
+import plistlib
 import re
 import shlex
 import shutil
@@ -35,9 +36,19 @@ def validate_unsigned_application(application):
 
 def validate_package(package, prefix):
     with zipfile.ZipFile(package) as archive:
+        names = archive.namelist()
         for name in [prefix + '/GuoAppTV', prefix + '/Info.plist']:
-            if name not in archive.namelist() or archive.getinfo(name).file_size == 0:
+            if name not in names or archive.getinfo(name).file_size == 0:
                 raise SystemExit('tvOS 压缩包缺少必要文件：' + name)
+        # 安装工具靠 Info.plist 里的 CFBundleExecutable 找可执行文件；
+        # 这里直接读包内 plist 校验，缺失就让 CI 失败，不再产出装不上的包。
+        info = plistlib.loads(archive.read(prefix + '/Info.plist'))
+        executable = info.get('CFBundleExecutable')
+        if not executable:
+            raise SystemExit('tvOS 压缩包 Info.plist 缺少 CFBundleExecutable，安装工具无法确定可执行文件。')
+        if prefix + '/' + executable not in names:
+            raise SystemExit('tvOS 压缩包缺少可执行文件：' + executable)
+        print('tvOS 包可执行文件：' + executable)
         corrupt = archive.testzip()
         if corrupt:
             raise SystemExit('tvOS 压缩包损坏：' + corrupt)
