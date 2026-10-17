@@ -94,12 +94,18 @@ final class DanmakuEngine {
     }
 }
 
+/// 可比较的播放进度（Swift 元组无法遵循 Equatable，onChange 不能直接监听元组）。
+struct PlaybackProgress: Equatable {
+    var position: Double
+    var duration: Double
+}
+
 // MARK: - 播放控制器
 
 /// 持有 AVPlayer，负责换集、进度上报、播完 / 失败通知、弹幕调度。
 @MainActor
 final class PlayerController: NSObject, ObservableObject {
-    @Published var progress = (position: 0.0, duration: 0.0)
+    @Published var progress = PlaybackProgress(position: 0, duration: 0)
     @Published var endedToken = 0
     @Published var failedToken = 0
 
@@ -157,7 +163,7 @@ final class PlayerController: NSObject, ObservableObject {
             guard let self else { return }
             let position = time.seconds
             let duration = player.currentItem?.duration.seconds ?? 0
-            progress = (
+            progress = PlaybackProgress(
                 position: position.isFinite ? position : 0,
                 duration: duration.isFinite ? duration : 0
             )
