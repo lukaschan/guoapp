@@ -238,6 +238,14 @@ final class PlayerController: NSObject, ObservableObject {
     func togglePause() {
         guard mpv != nil else { return }
         setFlag("pause", !getFlag("pause"))
+        updateIdleTimer()
+    }
+
+    /// 正在播放时禁止系统空闲计时器，避免 tvOS 屏保在看剧时弹出；
+    /// 暂停 / 停止 / 切后台时恢复，屏保才能正常出现。
+    /// 注意：mpv 不是 AVPlayer，系统不知道在播视频，必须手动关空闲计时器。
+    private func updateIdleTimer() {
+        UIApplication.shared.isIdleTimerDisabled = mpv != nil && !getFlag("pause")
     }
 
     func seek(by seconds: Double) {
@@ -336,11 +344,14 @@ final class PlayerController: NSObject, ObservableObject {
         }, contextPointer)
         command(["loadfile", url.absoluteString, "replace"])
         startProgressTimer()
+        updateIdleTimer()
     }
 
     private func destroyMpv() {
         progressTimer?.invalidate()
         progressTimer = nil
+        // 播放器销毁时恢复系统空闲计时器，屏保才能正常出现。
+        UIApplication.shared.isIdleTimerDisabled = false
         guard let handle = mpv else { return }
         mpv = nil
         mpv_set_wakeup_callback(handle, nil, nil)
@@ -452,6 +463,7 @@ final class PlayerController: NSObject, ObservableObject {
         guard let handle = mpv else { return }
         wasPlayingBeforeBackground = !getFlag("pause")
         setFlag("pause", true)
+        UIApplication.shared.isIdleTimerDisabled = false
         _ = mpv_set_option_string(handle, "vid", "no")
     }
 
@@ -461,6 +473,7 @@ final class PlayerController: NSObject, ObservableObject {
         if wasPlayingBeforeBackground {
             setFlag("pause", false)
         }
+        updateIdleTimer()
     }
 
     // MARK: - mpv 属性读写
