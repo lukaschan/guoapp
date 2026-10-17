@@ -78,6 +78,19 @@ actor CoreClient {
         return rows.compactMap { ($0 as? [String: Any]).map(Category.init(dict:)) }
     }
 
+    /// 榜单列表（Go 核心 `rankingBoards`）。
+    func rankingBoards() async throws -> [RankingBoard] {
+        let data = try await call(["action": "rankingBoards"])
+        let rows = data["items"] as? [Any] ?? []
+        return rows.compactMap { ($0 as? [String: Any]).map(RankingBoard.init(dict:)) }
+    }
+
+    /// 某一榜单的一页（Go 核心 `rankings`）。
+    func rankings(board: String, page: Int = 1) async throws -> RankingPage {
+        let data = try await call(["action": "rankings", "board": board, "page": page])
+        return RankingPage(dict: data)
+    }
+
     func catalog(
         source: String, page: Int = 1, query: String = "", category: String = "", force: Bool = false
     ) async throws -> CatalogPage {

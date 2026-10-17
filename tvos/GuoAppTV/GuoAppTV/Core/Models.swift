@@ -254,3 +254,41 @@ struct SourceSite: Identifiable, Hashable {
         ]
     }
 }
+
+/// 榜单：与 Dart 侧 RankingBoard 对齐，Go 核心 `rankingBoards` 返回。
+struct RankingBoard: Identifiable, Hashable {
+    let id: String
+    let source: String
+    let name: String
+    let description: String
+
+    init(dict: [String: Any]) {
+        id = stringValue(dict, "id")
+        source = stringValue(dict, "source")
+        name = stringValue(dict, "name")
+        description = stringValue(dict, "description")
+    }
+}
+
+/// 一页榜单：items 里每个元素是 `{rank, drama, metric}`，drama 与目录里的
+/// Drama 同一结构；顺序即排名，rank 不单独存（界面按顺序展示）。
+struct RankingPage {
+    let items: [Drama]
+    let page: Int
+    let hasMore: Bool
+    let warning: String
+
+    init(dict: [String: Any]) {
+        let rows = dict["items"] as? [Any] ?? []
+        items = rows.compactMap { row in
+            guard let row = row as? [String: Any],
+                  let dramaDict = row["drama"] as? [String: Any]
+            else { return nil }
+            return Drama(dict: dramaDict)
+        }
+        let page = intValue(dict, "page")
+        self.page = page > 0 ? page : 1
+        hasMore = dict["hasMore"] as? Bool == true
+        warning = stringValue(dict, "warning")
+    }
+}
