@@ -2,6 +2,10 @@
 
 每个版本一节，标题为 `pubspec.yaml` 中的完整版本号。发布工作流会把对应一节写入 GitHub Release 说明。
 
+## 未发布
+
+- 新增 Apple TV（tvOS 16+）原生应用：SwiftUI 界面 + 同一份 Go 核心（`DuanjuRequest` JSON 协议）+ AVPlayer 播放，支持浏览、搜索、详情、选集、追剧、观看进度、弹幕与播完自动连播下一集；Flutter 官方不支持 tvOS，故不复用 Dart 界面。构建：`python3 scripts/build_tvos.py [--all-sources]`，CI 同步产出 `*-tvos-unsigned` 未签名 IPA，需在 Mac 上用 Xcode 签名后安装；下载、局域网互联等功能暂未移植。（开发快照，未经 Xcode 构建与真机验证）
+
 ## 0.2.74+84
 
 - 电视端播放设置新增「解码方式」：硬解（默认）保持原有设置；硬解（兼容）和软解（兼容）关闭电视端的 PBO 上传与跳过去块滤波 / IDCT 等加速项，用于排查部分电视盒子有声音没画面的问题，切换后从当前位置重新加载。（开发快照，未经 NVIDIA Shield 真机验证）

@@ -44,6 +44,8 @@ Flutter 多端独立短剧 / 影视应用
 | Windows 10/11 x64 | 完整 ZIP 解压后运行 `hongguojian.exe` / `zhenguojian.exe`，保留所有 DLL 与 `data`；局域网原生发现依赖 Windows 10 1903+ |
 | iOS 15.1+ | 已加入工程、Go 核心链接、媒体依赖、文件管理与构建脚本；iOS 播放页禁用 media_kit_video 硬件纹理加速以规避 libmpv 渲染崩溃；`CFBundleDisplayName` 使用英文 `HongGuoJian` / `ZhenGuoJian` 以通过 iloader 等侧载工具注册 App ID 时的名称校验，中文名写入 `zh-Hans.lproj/InfoPlist.strings`（开发快照，未经 Xcode 构建验证）；待 Xcode 构建与真机验收，无已签名 IPA |
 
+| Apple TV（tvOS 16+） | 原生 SwiftUI 应用 + 同一份 Go 核心 + AVPlayer 播放；未签名 IPA，需在 Mac 上用 Xcode 签名后安装（开发快照，未经 Xcode 构建与真机验证） |
+
 `INSTALL_FAILED_NO_MATCHING_ABIS` 表示 APK 与设备架构不匹配，请更换对应架构安装包。
 
 ### GitHub Actions
@@ -58,6 +60,8 @@ Flutter 多端独立短剧 / 影视应用
 | `*-windows` | Windows x64 ZIP |
 | `*-ios-unsigned` | arm64 iPhone 未签名 IPA，下载后自行签名安装 |
 
+| `*-tvos-unsigned` | Apple TV 未签名 IPA，需在 Mac 上用 Xcode 签名后安装 |
+
 checks（格式、分析、测试不阻塞）、Android、Windows、iOS 全部成功后才创建 tag 和 Release；任一平台失败就不发布。已有 Release 不会被覆盖。手动发布流程为开发快照，尚未完成首次运行验证。
 
 Android 签名只使用仓库 Secrets：`ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`；同时需要配置仓库变量 `ANDROID_CERT_SHA256`（证书 SHA-256，冒号和大小写不限）。缺少任意一项都会发布失败。CI 通过环境变量把签名传给 Gradle；本机构建使用 `android/key.properties`。`key.properties` 和证书文件不入库。
@@ -67,7 +71,7 @@ Android 签名只使用仓库 Secrets：`ANDROID_KEYSTORE_BASE64`、`ANDROID_KEY
 Flutter `3.47.4`、Dart `3.12+`、Go `1.24.1+`、Python `3.10+`。
 Android 需要 JDK 17、SDK 36、NDK `28.2.13676358`；
 Windows 需要 Visual Studio C++ 桌面组件及 MinGW-w64 x64；
-iOS 需要 macOS、完整 Xcode 和 CocoaPods。
+iOS 需要 macOS、完整 Xcode 和 CocoaPods。tvOS 同样需要 macOS 和完整 Xcode。
 
 构建脚本对子进程默认设置 `GOPROXY=https://goproxy.cn,direct`、`GOSUMDB=off`，同名环境变量可覆盖。
 
@@ -84,6 +88,15 @@ python3 scripts/build_ios.py --all-sources
 python3 scripts/build_ios.py --core-only [--simulator]
 python3 scripts/build_ios.py --export-options /path/to/ExportOptions.plist
 ~~~
+
+~~~
+python3 scripts/build_tvos.py                      # Apple TV（红果鉴）
+python3 scripts/build_tvos.py --all-sources       # Apple TV（真果鉴）
+python3 scripts/build_tvos.py --core-only         # 只编译 tvOS 核心
+python3 scripts/build_tvos.py --export-options /path/to/ExportOptions.plist
+~~~
+
+Flutter 官方不支持 tvOS 目标，因此 Apple TV 版是原生 SwiftUI 应用：复用同一份 Go 核心（`DuanjuRequest` JSON 协议），播放改用系统 AVPlayer。支持浏览、搜索、详情、选集、追剧、观看进度、弹幕与播完自动连播下一集；下载、局域网互联等功能暂未移植。tvOS 沙盒限制：真机上只有 Caches 与 tmp 可写，核心数据与追剧/进度都存在 Caches，系统在存储不足时可能回收；后台下载不可用。
 
 产物在 `dist/android`、`dist/windows`、`dist/ios`，红果版以 `hongguojian-` 开头，全站源版以 `zhenguojian-` 开头。
 
@@ -120,6 +133,8 @@ go test -race -ldflags="-X duanjuapp/native/core.buildAllSources=true" ./...
 | `android`、`windows`、`ios` | 平台工程与必要资源 |
 | `assets/video_enhancement`、`packages/media_kit_libs_windows_video` | 增强 Shader 与许可、固定 Windows 媒体依赖插件 |
 | `scripts`、`.github/workflows` | 构建与发布 |
+
+| `tvos` | Apple TV 原生应用（SwiftUI + Go 核心 + AVPlayer） |
 | `test` | 自动化测试 |
 
 ## 站源开发约定
