@@ -128,7 +128,9 @@ def main():
         archive = derived / 'GuoAppTV.xcarchive'
         if archive.exists():
             shutil.rmtree(archive)
-        run(['xcodebuild', '-project', str(project), '-target', app_name,
+        # 注意：xcodebuild 要求 -derivedDataPath 必须配合 -scheme，
+        # 用 -target 会直接报错退出（exit 64）。
+        run(['xcodebuild', '-project', str(project), '-scheme', app_name,
              '-sdk', 'appletvos', '-configuration', 'Release',
              '-derivedDataPath', str(derived), '-archivePath', str(archive), 'archive'])
         exported = derived / 'export'
@@ -141,7 +143,7 @@ def main():
             shutil.copy2(package, destination)
             artifacts.append(destination)
     else:
-        run(['xcodebuild', '-project', str(project), '-target', app_name,
+        run(['xcodebuild', '-project', str(project), '-scheme', app_name,
              '-sdk', 'appletvos', '-configuration', 'Release',
              '-derivedDataPath', str(derived), 'CODE_SIGNING_ALLOWED=NO', 'build'])
         application = derived / 'Build' / 'Products' / 'Release-appletvos' / f'{app_name}.app'
