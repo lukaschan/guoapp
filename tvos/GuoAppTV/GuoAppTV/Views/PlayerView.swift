@@ -280,10 +280,24 @@ final class PlayerController: NSObject, ObservableObject {
         if start > 0 {
             _ = mpv_set_option_string(handle, "start", "\(start)")
         }
+        // 与 iOS 端 player_screen.dart 一致的 demuxer 选项：重试、实验特性、
+        // 扩展名、协议白名单（local 与否的分支与 iOS 相同）、解密密钥。
+        // 注意：不要用 mpv 自身的 decryption-key 选项——在此构建下它不生效
+        // （时长能读出但时间一直停在 0、无画面无声）。iOS 端用的是下面
+        // demuxer-lavf-o 这一路，把密钥作为 FFmpeg demuxer 选项直接传给 libavformat。
+        var lavfOptions = [
+            "seg_max_retry=3",
+            "strict=experimental",
+            "allowed_extensions=ALL",
+            plan.local
+                ? "protocol_whitelist=[file,crypto,data]"
+                : "protocol_whitelist=[http,https,tcp,tls,crypto,data,file]",
+        ]
         if hasDecryptionKey {
-            // CENC 解密密钥：必须在 mpv_initialize 之前设置。
-            _ = mpv_set_option_string(handle, "decryption-key", plan.decryptionKey)
+            lavfOptions.append("decryption_key=\(plan.decryptionKey)")
         }
+        _ = mpv_set_option_string(handle, "demuxer-lavf-o", lavfOptions.joined(separator: ","))
+        _ = mpv_set_option_string(handle, "network-timeout", "20")
         if !plan.local, !plan.headers.isEmpty {
             // 本地代理地址由 Go 核心转发请求头；直连地址才由 mpv 自己带头。
             // 注意：字段值含逗号时 mpv 会按逗号切分，站源的 UA/Referer 通常不含逗号。
