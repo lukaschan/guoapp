@@ -441,7 +441,13 @@ final class PlayerController: NSObject, ObservableObject {
 
     private func command(_ args: [String]) {
         guard let handle = mpv else { return }
-        var cArgs: [UnsafePointer<CChar>?] = args.map { strdup($0) }
+        // 逐个追加：strdup 返回可变指针，append 的参数类型触发单值隐式转换；
+        // 用 map 时闭包返回值类型推断不到不可变指针，编译报错。
+        var cArgs: [UnsafePointer<CChar>?] = []
+        cArgs.reserveCapacity(args.count + 1)
+        for arg in args {
+            cArgs.append(strdup(arg))
+        }
         cArgs.append(nil)
         cArgs.withUnsafeMutableBufferPointer { buffer in
             _ = mpv_command(handle, buffer.baseAddress)
