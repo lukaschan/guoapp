@@ -25,9 +25,6 @@ struct HomeView: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
                 categoryRow
-                if isRankingMode {
-                    boardRow
-                }
                 if appState.allSources {
                     sourceRow
                 }
@@ -91,52 +88,59 @@ struct HomeView: View {
     }
 
     private var categoryRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(categories) { category in
-                    let selected = category.id == selectedCategory
-                    Button(category.name) {
-                        selectedCategory = category.id
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(categories) { category in
+                        let selected = category.id == selectedCategory
+                        Button(category.name) {
+                            selectedCategory = category.id
+                        }
+                        .font(.system(size: 16))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(selected ? Color.white : Color.white.opacity(0.12))
+                        .foregroundColor(selected ? .black : .white)
+                        .cornerRadius(8)
                     }
-                    .font(.system(size: 16))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background(selected ? Color.white : Color.white.opacity(0.12))
-                    .foregroundColor(selected ? .black : .white)
-                    .cornerRadius(8)
-                }
-                // 红果榜单：与分类同一行，仅红果站源有。
-                if appState.selectedSource == "hongguo" {
-                    let selected = isRankingMode
-                    Button("红果榜单") {
-                        selectedCategory = Self.rankingCategoryId
+                    // 红果榜单：与分类同一行，仅红果站源有。
+                    if appState.selectedSource == "hongguo" {
+                        let selected = isRankingMode
+                        Button("红果榜单") {
+                            selectedCategory = Self.rankingCategoryId
+                        }
+                        .font(.system(size: 16))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(selected ? Color.white : Color.white.opacity(0.12))
+                        .foregroundColor(selected ? .black : .white)
+                        .cornerRadius(8)
+                        // 榜单模式下，榜单切换按钮紧跟在“红果榜单”右边，
+                        // 同一行横向滚动、不换行；按钮和字体都更小，省空间。
+                        if isRankingMode {
+                            ForEach(rankingBoards) { board in
+                                let boardSelected = board.id == selectedBoard
+                                Button(board.name) {
+                                    selectedBoard = board.id
+                                }
+                                .font(.system(size: 13))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(boardSelected ? Color.white : Color.white.opacity(0.12))
+                                .foregroundColor(boardSelected ? .black : .white)
+                                .cornerRadius(6)
+                                .id(board.id == rankingBoards.first?.id ? "board-first" : board.id)
+                            }
+                        }
                     }
-                    .font(.system(size: 16))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background(selected ? Color.white : Color.white.opacity(0.12))
-                    .foregroundColor(selected ? .black : .white)
-                    .cornerRadius(8)
                 }
             }
-        }
-    }
-
-    /// 榜单切换行：榜单模式下才显示（总热播榜 / 真人剧榜 / 漫剧榜 / AI 剧榜）。
-    private var boardRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(rankingBoards) { board in
-                    let selected = board.id == selectedBoard
-                    Button(board.name) {
-                        selectedBoard = board.id
+            // 榜单出现后自动滚到第一个榜单按钮，避免它藏在屏幕外。
+            .onChange(of: isRankingMode && !rankingBoards.isEmpty) { shouldScroll in
+                if shouldScroll {
+                    DispatchQueue.main.async {
+                        proxy.scrollTo("board-first", anchor: .leading)
                     }
-                    .font(.system(size: 16))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background(selected ? Color.white : Color.white.opacity(0.12))
-                    .foregroundColor(selected ? .black : .white)
-                    .cornerRadius(8)
                 }
             }
         }

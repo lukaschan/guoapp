@@ -51,7 +51,7 @@ struct SettingsView: View {
                     }
                     Picker("播放倍速", selection: $playbackSpeed) {
                         ForEach(Self.speedOptions, id: \.self) { value in
-                            Text("\(value)x").tag(value)
+                            Text(String(format: "%.2fx", value)).tag(value)
                         }
                     }
                     Text("清晰度与倍速在下一次打开剧集时生效。")

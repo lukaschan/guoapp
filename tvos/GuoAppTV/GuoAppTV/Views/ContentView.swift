@@ -28,6 +28,8 @@ struct ContentView: View {
                         .tabItem { Label("搜索", systemImage: "magnifyingglass") }
                     FollowingView()
                         .tabItem { Label("追剧", systemImage: "bookmark") }
+                    HistoryView()
+                        .tabItem { Label("最近观看", systemImage: "clock") }
                     SettingsView()
                         .tabItem { Label("设置", systemImage: "gearshape") }
                 }

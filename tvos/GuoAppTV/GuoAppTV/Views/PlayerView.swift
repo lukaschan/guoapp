@@ -66,10 +66,15 @@ final class DanmakuEngine {
         shown.removeAll()
     }
 
-    func tick(positionMs: Int) {
+    func tick(positionMs: Int, durationMs: Int) {
         guard enabled, let plan else { return }
-        if page == nil || positionMs >= page!.nextMs - 2000 {
-            fetchPage(from: positionMs, plan: plan)
+        // 窗口结束时间必须是本集总时长（与 iOS 一致），而不是固定 60 秒：
+        // Go 核心要求 durationMs > startMs；之前传固定 60000，播到 60 秒后
+        // 所有请求都被拒（且 try? 把错误吞了），弹幕就再也拉不到。
+        // 总时长未知时用当前位置 + 60 秒，保证 end > start。
+        let endMs = durationMs > positionMs ? durationMs : positionMs + 60_000
+        if page == nil || positionMs >= page!.nextMs - 2000 || positionMs < page!.startMs {
+            fetchPage(from: positionMs, end: endMs, plan: plan)
         }
         guard let page else { return }
         for item in page.items where !shown.contains(item.id) && item.timeMs >= positionMs
@@ -81,13 +86,13 @@ final class DanmakuEngine {
         if shown.count > 2000 { shown.removeAll() }
     }
 
-    private func fetchPage(from positionMs: Int, plan: PlaybackPlan) {
+    private func fetchPage(from positionMs: Int, end endMs: Int, plan: PlaybackPlan) {
         guard !fetching else { return }
         fetching = true
         Task {
             defer { fetching = false }
             if let result = try? await CoreClient.shared.danmaku(
-                plan: plan, startMs: positionMs, durationMs: 60_000
+                plan: plan, startMs: positionMs, durationMs: endMs
             ), self.plan?.session == plan.session {
                 page = result
             }
@@ -393,7 +398,10 @@ final class PlayerController: NSObject, ObservableObject {
             position: position.isFinite ? position : 0,
             duration: duration.isFinite ? duration : 0
         )
-        danmaku.tick(positionMs: Int(position * 1000))
+        danmaku.tick(
+            positionMs: Int(position * 1000),
+            durationMs: (duration.isFinite && duration > 0) ? Int(duration * 1000) : 0
+        )
         updateDebugInfo(position: position, duration: duration)
     }
 
