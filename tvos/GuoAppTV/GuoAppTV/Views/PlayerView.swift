@@ -214,7 +214,7 @@ final class PlayerController: NSObject, ObservableObject {
             }
             for track in tracks {
                 var codec = "?"
-                if let desc = track.formatDescriptions.first as? CMFormatDescription {
+                if let desc = track.formatDescriptions.first {
                     let sub = CMFormatDescriptionGetMediaSubType(desc)
                     let bytes: [UInt8] = [
                         UInt8((sub >> 24) & 0xff), UInt8((sub >> 16) & 0xff),
