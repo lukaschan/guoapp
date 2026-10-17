@@ -11,13 +11,23 @@ struct HomeView: View {
     @State private var loading = false
     @State private var error: String?
     @State private var categoriesSource = ""
+    @State private var rankingBoards: [RankingBoard] = []
+    @State private var selectedBoard = ""
+    @State private var rankingBoardsSource = ""
 
-    private var loadKey: String { appState.selectedSource + "|" + selectedCategory }
+    /// 榜单模式的哨兵分类 id：与核心分类 id 不冲突。
+    private static let rankingCategoryId = "__ranking__"
+    private var isRankingMode: Bool { selectedCategory == Self.rankingCategoryId }
+
+    private var loadKey: String { appState.selectedSource + "|" + selectedCategory + "|" + selectedBoard }
 
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
                 categoryRow
+                if isRankingMode {
+                    boardRow
+                }
                 if appState.allSources {
                     sourceRow
                 }
@@ -95,6 +105,39 @@ struct HomeView: View {
                     .foregroundColor(selected ? .black : .white)
                     .cornerRadius(8)
                 }
+                // 红果榜单：与分类同一行，仅红果站源有。
+                if appState.selectedSource == "hongguo" {
+                    let selected = isRankingMode
+                    Button("红果榜单") {
+                        selectedCategory = Self.rankingCategoryId
+                    }
+                    .font(.system(size: 16))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(selected ? Color.white : Color.white.opacity(0.12))
+                    .foregroundColor(selected ? .black : .white)
+                    .cornerRadius(8)
+                }
+            }
+        }
+    }
+
+    /// 榜单切换行：榜单模式下才显示（总热播榜 / 真人剧榜 / 漫剧榜 / AI 剧榜）。
+    private var boardRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(rankingBoards) { board in
+                    let selected = board.id == selectedBoard
+                    Button(board.name) {
+                        selectedBoard = board.id
+                    }
+                    .font(.system(size: 16))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(selected ? Color.white : Color.white.opacity(0.12))
+                    .foregroundColor(selected ? .black : .white)
+                    .cornerRadius(8)
+                }
             }
         }
     }
@@ -104,26 +147,55 @@ struct HomeView: View {
         loading = true
         error = nil
         do {
-            if categoriesSource != appState.selectedSource {
-                let fetched = try await CoreClient.shared.categories(
-                    source: appState.selectedSource
-                )
-                // 核心返回的分类里可能自带“全部”，与本地的 .all 重复；
-                // 按名称去重，保留第一个（即本地的 .all）。
-                var seenNames = Set<String>()
-                categories = ([.all] + fetched).filter { seenNames.insert($0.name).inserted }
-                categoriesSource = appState.selectedSource
-            }
-            let result = try await CoreClient.shared.catalog(
-                source: appState.selectedSource, page: page, category: selectedCategory
-            )
-            if firstPage {
-                items = result.items
+            if isRankingMode {
+                // 榜单模式：榜单列表只拿一次，默认选中第一个榜。
+                if rankingBoardsSource != appState.selectedSource {
+                    let boards = try await CoreClient.shared.rankingBoards()
+                    rankingBoards = boards.filter { $0.source == "hongguo" }
+                    rankingBoardsSource = appState.selectedSource
+                    if selectedBoard.isEmpty
+                        || !rankingBoards.contains(where: { $0.id == selectedBoard }) {
+                        selectedBoard = rankingBoards.first?.id ?? ""
+                    }
+                }
+                if selectedBoard.isEmpty {
+                    items = []
+                    hasMore = false
+                    warning = ""
+                } else {
+                    let result = try await CoreClient.shared.rankings(
+                        board: selectedBoard, page: page
+                    )
+                    if firstPage {
+                        items = result.items
+                    } else {
+                        items += result.items
+                    }
+                    hasMore = result.hasMore
+                    warning = result.warning
+                }
             } else {
-                items += result.items
+                if categoriesSource != appState.selectedSource {
+                    let fetched = try await CoreClient.shared.categories(
+                        source: appState.selectedSource
+                    )
+                    // 核心返回的分类里可能自带“全部”，与本地的 .all 重复；
+                    // 按名称去重，保留第一个（即本地的 .all）。
+                    var seenNames = Set<String>()
+                    categories = ([.all] + fetched).filter { seenNames.insert($0.name).inserted }
+                    categoriesSource = appState.selectedSource
+                }
+                let result = try await CoreClient.shared.catalog(
+                    source: appState.selectedSource, page: page, category: selectedCategory
+                )
+                if firstPage {
+                    items = result.items
+                } else {
+                    items += result.items
+                }
+                hasMore = result.hasMore
+                warning = result.warning
             }
-            hasMore = result.hasMore
-            warning = result.warning
         } catch {
             self.error = error.localizedDescription
         }

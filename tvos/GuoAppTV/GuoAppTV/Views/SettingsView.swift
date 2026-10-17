@@ -4,6 +4,18 @@ struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
     @AppStorage("danmakuEnabled") private var danmakuEnabled = true
     @AppStorage("autoAdvance") private var autoAdvance = true
+    @AppStorage("playbackDiagnostics") private var diagnosticsEnabled = false
+    @AppStorage("preferredQuality") private var preferredQuality = 0
+    @AppStorage("playbackSpeed") private var playbackSpeed = 1.0
+
+    /// 清晰度选项：与 iOS 端一致，0 = 自动 · 优先高清。
+    private static let qualityOptions = [0, 1080, 720, 480]
+    /// 倍速选项：与 iOS 端 playbackSpeeds 一致。
+    private static let speedOptions = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0]
+
+    private static func qualityLabel(_ value: Int) -> String {
+        value == 0 ? "自动 · 优先高清" : "\(value)P"
+    }
 
     var body: some View {
         NavigationStack {
@@ -31,6 +43,20 @@ struct SettingsView: View {
                 Section("播放") {
                     Toggle("弹幕", isOn: $danmakuEnabled)
                     Toggle("播完自动连播下一集", isOn: $autoAdvance)
+                    Toggle("播放诊断", isOn: $diagnosticsEnabled)
+                    Picker("清晰度", selection: $preferredQuality) {
+                        ForEach(Self.qualityOptions, id: \.self) { value in
+                            Text(Self.qualityLabel(value)).tag(value)
+                        }
+                    }
+                    Picker("播放倍速", selection: $playbackSpeed) {
+                        ForEach(Self.speedOptions, id: \.self) { value in
+                            Text("\(value)x").tag(value)
+                        }
+                    }
+                    Text("清晰度与倍速在下一次打开剧集时生效。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
                 Section("关于") {
                     HStack {

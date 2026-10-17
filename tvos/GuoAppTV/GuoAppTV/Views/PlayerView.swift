@@ -175,7 +175,7 @@ final class PlayerController: NSObject, ObservableObject {
     private var lastError = ""
     private var activePlan: PlaybackPlan?
     private var activeDanmakuEnabled = true
-    private var pendingPlay: (plan: PlaybackPlan, start: Double, danmakuEnabled: Bool)?
+    private var pendingPlay: (plan: PlaybackPlan, start: Double, danmakuEnabled: Bool, speed: Double)?
     private let overlay = DanmakuOverlayView()
     private let danmaku = DanmakuEngine()
     private var overlayAttached = false
@@ -204,17 +204,17 @@ final class PlayerController: NSObject, ObservableObject {
         }
         if let pending = pendingPlay {
             pendingPlay = nil
-            startPlayback(plan: pending.plan, start: pending.start, danmakuEnabled: pending.danmakuEnabled)
+            startPlayback(plan: pending.plan, start: pending.start, danmakuEnabled: pending.danmakuEnabled, speed: pending.speed)
         }
     }
 
-    func play(plan: PlaybackPlan, start: Double, danmakuEnabled: Bool) {
+    func play(plan: PlaybackPlan, start: Double, danmakuEnabled: Bool, speed: Double = 1.0) {
         guard metalLayer != nil else {
-            pendingPlay = (plan, start, danmakuEnabled)
+            pendingPlay = (plan, start, danmakuEnabled, speed)
             debugInfo = "正在加载…"
             return
         }
-        startPlayback(plan: plan, start: start, danmakuEnabled: danmakuEnabled)
+        startPlayback(plan: plan, start: start, danmakuEnabled: danmakuEnabled, speed: speed)
     }
 
     func stop() {
@@ -241,7 +241,7 @@ final class PlayerController: NSObject, ObservableObject {
 
     // MARK: - 播放启动
 
-    private func startPlayback(plan: PlaybackPlan, start: Double, danmakuEnabled: Bool) {
+    private func startPlayback(plan: PlaybackPlan, start: Double, danmakuEnabled: Bool, speed: Double = 1.0) {
         destroyMpv()
         danmaku.configure(plan: plan, enabled: danmakuEnabled)
         guard let url = URL(string: plan.url) else {
@@ -250,7 +250,7 @@ final class PlayerController: NSObject, ObservableObject {
             return
         }
         guard let layer = metalLayer else {
-            pendingPlay = (plan, start, danmakuEnabled)
+            pendingPlay = (plan, start, danmakuEnabled, speed)
             debugInfo = "正在加载…"
             return
         }
@@ -298,6 +298,10 @@ final class PlayerController: NSObject, ObservableObject {
         }
         _ = mpv_set_option_string(handle, "demuxer-lavf-o", lavfOptions.joined(separator: ","))
         _ = mpv_set_option_string(handle, "network-timeout", "20")
+        // 播放倍速：来自设置里的播放倍速，打开剧集时生效。
+        if speed != 1.0 {
+            _ = mpv_set_option_string(handle, "speed", "\(speed)")
+        }
         if !plan.local, !plan.headers.isEmpty {
             // 本地代理地址由 Go 核心转发请求头；直连地址才由 mpv 自己带头。
             // 注意：字段值含逗号时 mpv 会按逗号切分，站源的 UA/Referer 通常不含逗号。
@@ -529,8 +533,12 @@ struct PlayerView: View {
     @EnvironmentObject private var store: Store
     @AppStorage("danmakuEnabled") private var danmakuEnabled = true
     @AppStorage("autoAdvance") private var autoAdvance = true
+    @AppStorage("playbackDiagnostics") private var diagnosticsEnabled = false
+    @AppStorage("preferredQuality") private var preferredQuality = 0
+    @AppStorage("playbackSpeed") private var playbackSpeed = 1.0
 
     @StateObject private var controller = PlayerController()
+    @FocusState private var playerFocused: Bool
     @State private var currentIndex: Int
     @State private var start: Double
     @State private var plan: PlaybackPlan?
@@ -551,7 +559,23 @@ struct PlayerView: View {
             if plan != nil {
                 PlayerHostView(controller: controller)
                     .ignoresSafeArea()
-                if !controller.debugInfo.isEmpty {
+                    // 遥控器按键的前提：播放画面必须是可聚焦且已获得焦点。
+                    // 之前这里没有任何可聚焦视图，onPlayPauseCommand / onMoveCommand
+                    // 收不到事件，所以暂停、快进都不生效。
+                    .focusable()
+                    .focused($playerFocused)
+                    .onAppear { playerFocused = true }
+                    .onPlayPauseCommand { controller.togglePause() }
+                    .onMoveCommand { direction in
+                        switch direction {
+                        case .left: controller.seek(by: -10)
+                        case .right: controller.seek(by: 10)
+                        default: break
+                        }
+                    }
+                    // 遥控器点按（Select）也切暂停。
+                    .onTapGesture { controller.togglePause() }
+                if diagnosticsEnabled && !controller.debugInfo.isEmpty {
                     Text(controller.debugInfo)
                         .font(.system(size: 22))
                         .foregroundColor(.white)
@@ -579,16 +603,6 @@ struct PlayerView: View {
         }
         .task {
             await load()
-        }
-        .onPlayPauseCommand {
-            controller.togglePause()
-        }
-        .onMoveCommand { direction in
-            switch direction {
-            case .left: controller.seek(by: -10)
-            case .right: controller.seek(by: 10)
-            default: break
-            }
         }
         .onChange(of: controller.endedToken) { token in
             guard token > 0 else { return }
@@ -620,10 +634,12 @@ struct PlayerView: View {
         error = nil
         let episode = episodes[currentIndex]
         do {
-            let resolved = try await CoreClient.shared.resolve(drama: drama, episode: episode)
+            let resolved = try await CoreClient.shared.resolve(
+                drama: drama, episode: episode, quality: preferredQuality
+            )
             guard !Task.isCancelled else { return }
             plan = resolved
-            controller.play(plan: resolved, start: start, danmakuEnabled: danmakuEnabled)
+            controller.play(plan: resolved, start: start, danmakuEnabled: danmakuEnabled, speed: playbackSpeed)
         } catch {
             guard !Task.isCancelled else { return }
             self.error = error.localizedDescription
@@ -647,7 +663,7 @@ struct PlayerView: View {
             do {
                 let next = try await CoreClient.shared.fallback(plan: plan)
                 self.plan = next
-                controller.play(plan: next, start: 0, danmakuEnabled: danmakuEnabled)
+                controller.play(plan: next, start: 0, danmakuEnabled: danmakuEnabled, speed: playbackSpeed)
             } catch {
                 self.error = error.localizedDescription
             }
