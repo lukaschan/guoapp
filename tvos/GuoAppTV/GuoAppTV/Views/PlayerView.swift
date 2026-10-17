@@ -215,6 +215,7 @@ final class PlayerController: NSObject, ObservableObject {
             lines.append("错误: \(error.localizedDescription)")
         }
         let asset = item.asset
+        lines.append("资产可播: \(asset.isPlayable ? "是" : "否")")
         for mediaType in [AVMediaType.video, AVMediaType.audio] {
             let tracks = asset.tracks(withMediaType: mediaType)
             if tracks.isEmpty {
@@ -242,7 +243,7 @@ final class PlayerController: NSObject, ObservableObject {
                     case "mp4v": name = "MPEG-4"
                     default: name = codec
                     }
-                    lines.append("视频: \(name) (\(codec)) \(Int(track.naturalSize.width))x\(Int(track.naturalSize.height))")
+                    lines.append("视频: \(name) (\(codec)) \(Int(track.naturalSize.width))x\(Int(track.naturalSize.height)) 可播: \(track.isPlayable ? "是" : "否")")
                 } else {
                     let name: String
                     switch codec {
@@ -252,7 +253,7 @@ final class PlayerController: NSObject, ObservableObject {
                     case "opus": name = "Opus"
                     default: name = codec
                     }
-                    lines.append("音频: \(name) (\(codec))")
+                    lines.append("音频: \(name) (\(codec)) 可播: \(track.isPlayable ? "是" : "否")")
                 }
             }
         }
